@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hg's Stash</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Josefin+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0f0a;
+    --bg2:       #0f1a0f;
+    --bg3:       #142014;
+    --green:     #1a3d1a;
+    --green-mid: #2a5c2a;
+    --green-lt:  #3d7a3d;
+    --gold:      #c9a84c;
+    --gold-lt:   #e8c96a;
+    --gold-dim:  #8a6f2e;
+    --text:      #e8e0d0;
+    --text-dim:  #a09880;
+    --border:    rgba(201,168,76,0.2);
+    --border-mid:rgba(201,168,76,0.4);
+    --glow:      rgba(201,168,76,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Josefin Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events:none;
+    z-index:0;
+    opacity:0.4;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(180deg, var(--bg) 80%, transparent);
+    padding: 20px 20px 12px;
+    text-align: center;
+  }
+
+  .logo-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .logo-leaf {
+    font-size: 22px;
+    animation: sway 3s ease-in-out infinite;
+  }
+
+  @keyframes sway {
+    0%,100% { transform: rotate(-5deg); }
+    50%      { transform: rotate(5deg); }
+  }
+
+  .logo-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-lt), var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    letter-spacing: 6px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+  }
+
+  .gold-line {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin-top: 12px;
+    opacity: 0.5;
+  }
+
+  /* ── CART BADGE ── */
+  .cart-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 200;
+    background: var(--gold);
+    color: var(--bg);
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(201,168,76,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .cart-btn:active { transform: scale(0.9); }
+
+  .cart-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #e74c3c;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    display: none;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; animation: fadeIn 0.3s ease; }
+  .screen.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── PRODUCT GRID ── */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    padding: 16px 20px 8px;
+  }
+
+  .product-grid {
+    padding: 0 16px 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .product-card {
+    background: linear-gradient(135deg, var(--bg2), var(--bg3));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    position: relative;
+  }
+
+  .product-card:active { transform: scale(0.98); }
+
+  .product-card:hover {
+    border-color: var(--border-mid);
+    box-shadow: 0 8px 32px var(--glow);
+  }
+
+  .product-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .product-card:hover::before { opacity: 1; }
+
+  .card-img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+    background: var(--green);
+  }
+
+  .card-img-placeholder {
+    width: 100%;
+    height: 120px;
+    background: linear-gradient(135deg, var(--green), var(--green-mid));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+  }
+
+  .card-body { padding: 14px 16px; }
+
+  .card-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .card-tiers {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .card-strains {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .card-strains span {
+    display: inline-block;
+    background: rgba(61,122,61,0.3);
+    border: 1px solid rgba(61,122,61,0.5);
+    border-radius: 20px;
+    padding: 2px 8px;
+    margin: 2px 2px 2px 0;
+    font-size: 10px;
+    color: #8fc88f;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-price {
+    font-size: 13px;
+    color: var(--gold-lt);
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .card-cta {
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color: var(--bg);
+    border: none;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  /* ── PRODUCT DETAIL ── */
+  .detail-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 20px;
+    color: var(--gold);
+    font-size: 13px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    background: none;
+    border: none;
+  }
+
+  .detail-img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    background: linear-gradient(135deg, var(--green), var(--green-mid));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 72px;
+  }
+
+  .detail-body { padding: 20px; }
+
+  .detail-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.2;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--text), var(--gold-lt));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .detail-section-title {
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    margin: 20px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .detail-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .strains-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .strain-pill {
+    background: rgba(61,122,61,0.2);
+    border: 1px solid rgba(61,122,61,0.5);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: #8fc88f;
+    letter-spacing: 1px;
+  }
+
+  /* ── WEIGHT/QTY SELECTOR ── */
+  .tier-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .tier-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+  }
+
+  .tier-btn.selected {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.1);
+    box-shadow: 0 0 16px var(--glow);
+  }
+
+  .tier-btn:active { transform: scale(0.96); }
+
+  .tier-size {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .tier-price {
+    font-size: 16px;
+    color: var(--gold);
+    font-weight: 700;
+    margin-top: 2px;
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* Qty stepper */
+  .qty-stepper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    justify-content: center;
+  }
+
+  .qty-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-mid);
+    background: none;
+    color: var(--gold);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+
+  .qty-btn:active { background: var(--glow); }
+
+  .qty-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: center;
+    color: var(--text);
+  }
+
+  /* Add to cart btn */
+  .add-cart-btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color: var(--bg);
+    border: none;
+    border-radius: 14px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 20px;
+    margin-bottom: 30px;
+    transition: opacity 0.2s, transform 0.15s;
+    box-shadow: 0 8px 24px rgba(201,168,76,0.3);
+  }
+
+  .add-cart-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+  /* ── CART SCREEN ── */
+  .cart-items { padding: 0 16px; }
+
+  .cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cart-item-info { flex: 1; }
+
+  .cart-item-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .cart-item-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .cart-item-price {
+    font-size: 16px;
+    color: var(--gold);
+    font-weight: 700;
+    font-family: 'Playfair Display', serif;
+  }
+
+  .cart-item-remove {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+
+  .cart-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    margin: 8px 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border-mid);
+    border-radius: 14px;
+  }
+
+  .cart-total-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .cart-total-amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    color: var(--gold-lt);
+    font-weight: 700;
+  }
+
+  .checkout-btn {
+    width: calc(100% - 32px);
+    margin: 8px 16px 30px;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color: var(--bg);
+    border: none;
+    border-radius: 14px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(201,168,76,0.3);
+  }
+
+  /* ── CHECKOUT FORM ── */
+  .form-wrap { padding: 0 20px 100px; }
+
+  .form-group { margin-bottom: 16px; }
+
+  .form-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: var(--text);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 14px;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus { border-color: var(--gold); }
+  .form-input.error { border-color: #e74c3c; }
+
+  .form-input::placeholder { color: var(--text-dim); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .form-error {
+    font-size: 11px;
+    color: #e74c3c;
+    margin-top: 4px;
+    display: none;
+  }
+
+  /* Crypto selector */
+  .crypto-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .crypto-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .crypto-btn.selected {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.1);
+  }
+
+  .crypto-icon { font-size: 24px; margin-bottom: 4px; }
+  .crypto-name { font-size: 12px; color: var(--text); letter-spacing: 2px; font-weight: 600; }
+  .crypto-ticker { font-size: 10px; color: var(--text-dim); }
+
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color: var(--bg);
+    border: none;
+    border-radius: 14px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(201,168,76,0.3);
+    margin-bottom: 30px;
+  }
+
+  /* ── PAYMENT SCREEN ── */
+  .payment-wrap {
+    padding: 20px;
+    text-align: center;
+  }
+
+  .payment-icon { font-size: 56px; margin-bottom: 16px; }
+
+  .payment-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--gold-lt);
+    margin-bottom: 8px;
+  }
+
+  .payment-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+  }
+
+  .payment-box {
+    background: var(--bg3);
+    border: 1px solid var(--border-mid);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    text-align: left;
+  }
+
+  .payment-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .payment-row:last-child { margin-bottom: 0; }
+
+  .payment-row-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .payment-row-value {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .payment-amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .wallet-box {
+    background: var(--bg3);
+    border: 1px solid var(--border-mid);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .wallet-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .wallet-address {
+    font-size: 11px;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.6;
+    font-family: monospace;
+    background: var(--bg);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .copy-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px;
+    background: none;
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    color: var(--gold);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .copy-btn:active { background: var(--glow); }
+
+  .watching-badge {
+    background: rgba(26,61,26,0.5);
+    border: 1px solid rgba(61,122,61,0.5);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 11px;
+    color: #8fc88f;
+    letter-spacing: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .pulse {
+    width: 8px; height: 8px;
+    background: #4caf50;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.4; transform:scale(0.8); }
+  }
+
+  /* Empty cart */
+  .empty-state {
+    text-align: center;
+    padding: 60px 30px;
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-text { color: var(--text-dim); font-size: 13px; letter-spacing: 2px; }
+
+  /* Screen title */
+  .screen-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+
+  .screen-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .back-arrow {
+    background: none;
+    border: none;
+    color: var(--gold);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Cart Button -->
+<button class="cart-btn" onclick="showScreen('cart')">
+  🛒
+  <span class="cart-count" id="cartCount">0</span>
+</button>
+
+<!-- ══════════════ SCREEN: SHOP ══════════════ -->
+<div class="screen active" id="screen-shop">
+  <div class="header">
+    <div class="logo-line">
+      <span class="logo-leaf">🌿</span>
+      <span class="logo-text">Hg's Stash</span>
+      <span class="logo-leaf">🌿</span>
+    </div>
+    <div class="logo-sub">Premium THC-A • Discreet Shipping</div>
+    <div class="gold-line"></div>
+  </div>
+
+  <div class="section-label">— Our Menu —</div>
+
+  <div class="product-grid" id="productGrid">
+    <!-- Products injected by JS -->
+  </div>
+</div>
+
+<!-- ══════════════ SCREEN: DETAIL ══════════════ -->
+<div class="screen" id="screen-detail">
+  <button class="detail-back" onclick="showScreen('shop')">← BACK</button>
+  <div id="detailContent"></div>
+</div>
+
+<!-- ══════════════ SCREEN: CART ══════════════ -->
+<div class="screen" id="screen-cart">
+  <div class="screen-header">
+    <button class="back-arrow" onclick="showScreen('shop')">←</button>
+    <span class="screen-title">Your Cart</span>
+  </div>
+  <div id="cartContent"></div>
+</div>
+
+<!-- ══════════════ SCREEN: CHECKOUT ══════════════ -->
+<div class="screen" id="screen-checkout">
+  <div class="screen-header">
+    <button class="back-arrow" onclick="showScreen('cart')">←</button>
+    <span class="screen-title">Shipping & Payment</span>
+  </div>
+  <div class="form-wrap">
+    <div class="detail-section-title">Shipping Info</div>
+
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input class="form-input" id="fname" placeholder="First Last" autocomplete="name">
+      <div class="form-error" id="err-fname">Please enter your full name (first + last)</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Street Address</label>
+      <input class="form-input" id="faddress" placeholder="123 Main Street" autocomplete="street-address">
+      <div class="form-error" id="err-faddress">Must include a house/building number</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">City</label>
+      <input class="form-input" id="fcity" placeholder="Austin" autocomplete="address-level2">
+      <div class="form-error" id="err-fcity">Letters only please</div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">State</label>
+        <input class="form-input" id="fstate" placeholder="TX" maxlength="2" autocomplete="address-level1" style="text-transform:uppercase">
+        <div class="form-error" id="err-fstate">Invalid state code</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ZIP Code</label>
+        <input class="form-input" id="fzip" placeholder="78701" maxlength="5" inputmode="numeric">
+        <div class="form-error" id="err-fzip">Must be 5 digits</div>
+      </div>
+    </div>
+
+    <div class="detail-section-title">Payment Method</div>
+
+    <div class="crypto-grid">
+      <div class="crypto-btn selected" id="crypto-BTC" onclick="selectCrypto('BTC')">
+        <div class="crypto-icon">₿</div>
+        <div class="crypto-name">Bitcoin</div>
+        <div class="crypto-ticker">BTC</div>
+      </div>
+      <div class="crypto-btn" id="crypto-SOL" onclick="selectCrypto('SOL')">
+        <div class="crypto-icon">◎</div>
+        <div class="crypto-name">Solana</div>
+        <div class="crypto-ticker">SOL</div>
+      </div>
+    </div>
+
+    <button class="submit-btn" onclick="submitOrder()">PLACE ORDER →</button>
+  </div>
+</div>
+
+<!-- ══════════════ SCREEN: PAYMENT ══════════════ -->
+<div class="screen" id="screen-payment">
+  <div class="payment-wrap" id="paymentContent"></div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const CONFIG = {
+  BTC_ADDRESS: 'bc1qk257zk8wd7l5ls26psnvvpdmnssqzq926l4m09',
+  SOL_ADDRESS: 'GWtFxEg86bksPe5tPqHoy4h5GjufWi3UjrNd7tN1JwYc',
+  BOT_USERNAME: 'HgsStashBot', // ← update with your bot username
+};
+
+// ── PRODUCTS ─────────────────────────────────────────────────
+const PRODUCTS = [
+  {
+    id: 'p1',
+    name: '200mg Rosin Infused Gummies',
+    emoji: '🍬',
+    strains: [],
+    tiers: [
+      { size: '1x', price: 25 },
+      { size: '25x', price: 625 },
+      { size: '50x', price: 1250 },
+    ],
+  },
+  {
+    id: 'p2',
+    name: 'AAA+ Indoor Flower',
+    emoji: '🌿',
+    strains: ['Larry OG', 'Mule Fuel', 'Cheetah Piss', 'Oreoz', 'Cream Soda', 'LCG', 'Gushmints'],
+    tiers: [
+      { size: '1oz', price: 200 },
+      { size: '2oz', price: 375 },
+      { size: '4oz', price: 700 },
+      { size: '8oz', price: 1200 },
+      { size: '1lb', price: 1475 },
+    ],
+  },
+  {
+    id: 'p3',
+    name: '2G Ace Ultra',
+    emoji: '💨',
+    strains: [],
+    tiers: [
+      { size: '1x',   price: 20 },
+      { size: '25x',  price: 400 },
+      { size: '50x',  price: 800 },
+      { size: '100x', price: 1600 },
+    ],
+  },
+  {
+    id: 'p4',
+    name: '2G Boutiq Switch',
+    emoji: '💨',
+    strains: [],
+    tiers: [
+      { size: '1x',   price: 20 },
+      { size: '25x',  price: 400 },
+      { size: '50x',  price: 800 },
+      { size: '100x', price: 1600 },
+    ],
+  },
+  {
+    id: 'p5',
+    name: 'Exotic Flower',
+    emoji: '🌸',
+    strains: ['Roze', 'Sour Diesel', 'Perm Marker', 'Thin Mintz'],
+    tiers: [
+      { size: '1oz', price: 200 },
+      { size: '2oz', price: 375 },
+      { size: '4oz', price: 700 },
+      { size: '8oz', price: 1200 },
+      { size: '1lb', price: 1475 },
+    ],
+  },
+  {
+    id: 'p6',
+    name: 'THC-A Flower',
+    emoji: '🌾',
+    strains: [],
+    tiers: [
+      { size: '1lb', price: 600 },
+    ],
+  },
+];
+
+// ── STATE ─────────────────────────────────────────────────────
+let cart = [];
+let selectedCrypto = 'BTC';
+let currentProduct = null;
+let selectedTier = null;
+
+// ── TELEGRAM ──────────────────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// ── SCREENS ───────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ── RENDER SHOP ───────────────────────────────────────────────
+function renderShop() {
+  const grid = document.getElementById('productGrid');
+  grid.innerHTML = PRODUCTS.map(p => {
+    const startPrice = p.tiers[0].price;
+    const tierText = p.tiers.map(t => `${t.size} $${t.price.toLocaleString()}`).join(' · ');
+    const strainsHtml = p.strains.length
+      ? p.strains.slice(0,4).map(s => `<span>${s}</span>`).join('') + (p.strains.length > 4 ? `<span>+${p.strains.length-4} more</span>` : '')
+      : '';
+    return `
+      <div class="product-card" onclick="openProduct('${p.id}')">
+        ${p.image
+          ? `<img class="card-img" src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : ''}
+        <div class="card-img-placeholder" style="${p.image ? 'display:none' : ''}">${p.emoji}</div>
+        <div class="card-body">
+          <div class="card-name">${p.name}</div>
+          <div class="card-tiers">${tierText}</div>
+          ${strainsHtml ? `<div class="card-strains">${strainsHtml}</div>` : ''}
+        </div>
+        <div class="card-footer">
+          <div class="card-price">from $${startPrice}</div>
+          <button class="card-cta">SELECT</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── PRODUCT DETAIL ─────────────────────────────────────────────
+function openProduct(id) {
+  currentProduct = PRODUCTS.find(p => p.id === id);
+  selectedTier = null;
+  renderDetail();
+  showScreen('detail');
+}
+
+function renderDetail() {
+  const p = currentProduct;
+  const strainsHtml = p.strains.map(s => `<div class="strain-pill">${s}</div>`).join('');
+  const tiersHtml = p.tiers.map((t, i) => `
+    <div class="tier-btn ${i===0?'selected':''}" id="tier-${i}" onclick="selectTier(${i}, ${t.price}, '${t.size}')">
+      <div class="tier-size">${t.size}</div>
+      <div class="tier-price">$${t.price.toLocaleString()}</div>
+    </div>
+  `).join('');
+
+  selectedTier = { size: p.tiers[0].size, price: p.tiers[0].price };
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-img">${p.emoji}</div>
+    <div class="detail-body">
+      <div class="detail-name">${p.name}</div>
+
+      ${p.strains.length ? `
+        <div class="detail-section-title">Available Strains</div>
+        <div class="strains-grid">${strainsHtml}</div>
+      ` : ''}
+
+      <div class="detail-section-title">Select Quantity</div>
+      <div class="tier-grid">${tiersHtml}</div>
+
+      <button class="add-cart-btn" onclick="addToCart()">ADD TO CART →</button>
+    </div>
+  `;
+}
+
+function selectTier(idx, price, size) {
+  document.querySelectorAll('.tier-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('tier-' + idx).classList.add('selected');
+  selectedTier = { size, price };
+}
+
+// ── CART ──────────────────────────────────────────────────────
+function addToCart() {
+  if (!selectedTier) return;
+  cart.push({
+    id: currentProduct.id,
+    name: currentProduct.name,
+    size: selectedTier.size,
+    price: selectedTier.price,
+    emoji: currentProduct.emoji,
+  });
+  updateCartBadge();
+  showScreen('shop');
+  // Flash confirmation
+  const btn = document.querySelector('.add-cart-btn');
+  if (btn) { btn.textContent = 'ADDED ✓'; setTimeout(() => btn.textContent = 'ADD TO CART →', 1000); }
+}
+
+function updateCartBadge() {
+  const badge = document.getElementById('cartCount');
+  if (cart.length > 0) {
+    badge.style.display = 'flex';
+    badge.textContent = cart.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderCart() {
+  const el = document.getElementById('cartContent');
+  if (cart.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🛒</div>
+        <div class="empty-text">YOUR CART IS EMPTY</div>
+      </div>
+    `;
+    return;
+  }
+  const total = cart.reduce((sum, i) => sum + i.price, 0);
+  const itemsHtml = cart.map((item, idx) => `
+    <div class="cart-item">
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.emoji} ${item.name}</div>
+        <div class="cart-item-sub">${item.size}</div>
+      </div>
+      <div class="cart-item-price">$${item.price.toLocaleString()}</div>
+      <button class="cart-item-remove" onclick="removeFromCart(${idx})">✕</button>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="cart-items">${itemsHtml}</div>
+    <div class="cart-total">
+      <div class="cart-total-label">Total</div>
+      <div class="cart-total-amount">$${total.toLocaleString()}</div>
+    </div>
+    <button class="checkout-btn" onclick="showScreen('checkout')">CHECKOUT →</button>
+  `;
+}
+
+function removeFromCart(idx) {
+  cart.splice(idx, 1);
+  updateCartBadge();
+  renderCart();
+}
+
+// ── CHECKOUT ──────────────────────────────────────────────────
+function selectCrypto(symbol) {
+  selectedCrypto = symbol;
+  document.querySelectorAll('.crypto-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('crypto-' + symbol).classList.add('selected');
+}
+
+const VALID_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+
+function validateField(id, errId, check) {
+  const el = document.getElementById(id);
+  const err = document.getElementById(errId);
+  const valid = check(el.value.trim());
+  el.classList.toggle('error', !valid);
+  err.style.display = valid ? 'none' : 'block';
+  return valid;
+}
+
+function submitOrder() {
+  const v1 = validateField('fname',    'err-fname',    v => v.split(' ').length >= 2 && v.split(' ')[1].length > 0);
+  const v2 = validateField('faddress', 'err-faddress', v => /\d/.test(v));
+  const v3 = validateField('fcity',    'err-fcity',    v => /^[a-zA-Z\s\-\.]+$/.test(v) && v.length >= 2);
+  const v4 = validateField('fstate',   'err-fstate',   v => VALID_STATES.has(v.toUpperCase()));
+  const v5 = validateField('fzip',     'err-fzip',     v => /^\d{5}$/.test(v));
+
+  if (!v1 || !v2 || !v3 || !v4 || !v5) return;
+
+  const order = {
+    name:    document.getElementById('fname').value.trim(),
+    address: document.getElementById('faddress').value.trim(),
+    city:    document.getElementById('fcity').value.trim(),
+    state:   document.getElementById('fstate').value.trim().toUpperCase(),
+    zip:     document.getElementById('fzip').value.trim(),
+    crypto:  selectedCrypto,
+    items:   cart,
+    total:   cart.reduce((s, i) => s + i.price, 0),
+  };
+
+  showPaymentScreen(order);
+}
+
+// ── PAYMENT ───────────────────────────────────────────────────
+function showPaymentScreen(order) {
+  const wallet = order.crypto === 'BTC' ? CONFIG.BTC_ADDRESS : CONFIG.SOL_ADDRESS;
+  const symbol = order.crypto === 'BTC' ? '₿' : '◎';
+  const itemsList = order.items.map(i => `${i.size} ${i.name}`).join(', ');
+
+  document.getElementById('paymentContent').innerHTML = `
+    <div class="payment-icon">💳</div>
+    <div class="payment-title">Send Payment</div>
+    <div class="payment-sub">COMPLETE YOUR ORDER</div>
+
+    <div class="payment-box">
+      <div class="payment-row">
+        <span class="payment-row-label">Order Total</span>
+        <span class="payment-amount">$${order.total.toLocaleString()}</span>
+      </div>
+      <div class="payment-row">
+        <span class="payment-row-label">Items</span>
+        <span class="payment-row-value" style="font-size:12px;max-width:60%;text-align:right">${itemsList}</span>
+      </div>
+      <div class="payment-row">
+        <span class="payment-row-label">Ship To</span>
+        <span class="payment-row-value" style="font-size:12px;max-width:60%;text-align:right">${order.name}, ${order.city} ${order.state} ${order.zip}</span>
+      </div>
+    </div>
+
+    <div class="wallet-box">
+      <div class="wallet-label">${symbol} Send ${order.crypto} To</div>
+      <div class="wallet-address" id="walletAddr">${wallet}</div>
+      <button class="copy-btn" onclick="copyWallet('${wallet}')">📋 COPY ADDRESS</button>
+    </div>
+
+    <div class="watching-badge">
+      <div class="pulse"></div>
+      WATCHING FOR PAYMENT
+    </div>
+
+    <p style="font-size:11px;color:var(--text-dim);margin-top:16px;line-height:1.8;letter-spacing:1px;">
+      Send the exact USD equivalent in ${order.crypto} to the address above.<br>
+      You'll receive a Telegram message the moment we detect your payment. 🌿
+    </p>
+  `;
+
+  // Send order to bot via Telegram
+  if (tg) {
+    tg.sendData(JSON.stringify(order));
+  }
+
+  showScreen('payment');
+}
+
+function copyWallet(addr) {
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✓ COPIED!';
+    setTimeout(() => btn.textContent = '📋 COPY ADDRESS', 2000);
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+renderShop();
+
+// Re-render cart when navigating to it
+const cartScreen = document.getElementById('screen-cart');
+const observer = new MutationObserver(() => {
+  if (cartScreen.classList.contains('active')) renderCart();
+});
+observer.observe(cartScreen, { attributes: true });
+</script>
+</body>
+</html>
